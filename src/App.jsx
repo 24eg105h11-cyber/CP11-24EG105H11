@@ -75,7 +75,9 @@ function App() {
         },
       ],
     },
-  ]);
+  ], {
+    basename: '/ATP-Final-24EG105H11/'
+  });
 
   return (
     <div>
