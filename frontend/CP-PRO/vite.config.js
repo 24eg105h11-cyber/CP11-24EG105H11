@@ -1,0 +1,17 @@
+import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
+
+import react from '@vitejs/plugin-react'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      '/auth': 'http://localhost:4000',
+      '/user-api': 'http://localhost:4000',
+      '/author-api': 'http://localhost:4000',
+      '/admin-api': 'http://localhost:4000',
+    }
+  }
+})
