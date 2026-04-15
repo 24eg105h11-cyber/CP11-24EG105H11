@@ -73,13 +73,13 @@ commonApp.post("/login", async (req, res) => {
   const user = await UserModel.findOne({ email: email });
   //if use not found
   if (!user) {
-    return res.status(400).json({ message: "Invalid email" });
+    return res.status(400).json({ message: "error occurred", error: "Invalid email" });
   }
   //compare password
   const isMatched = await compare(password, user.password);
   //if passwords not matched
   if (!isMatched) {
-    return res.status(400).json({ message: "Invalid password" });
+    return res.status(400).json({ message: "error occurred", error: "Invalid password" });
   }
   //create jwt
   const signedToken = sign(
