@@ -15,13 +15,31 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   process.env.FRONTEND_URL,
+  ...(process.env.FRONTEND_URLS || "")
+    .split(",")
+    .map((url) => url.trim()),
 ].filter(Boolean);
 
+const vercelPreviewPattern = /^https:\/\/cp11-[a-z0-9-]+-24eg105h11-cybers-projects\.vercel\.app$/;
+
 //enable cors
-app.use(cors({
-  origin: allowedOrigins,
-  credentials:true
-}))
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow non-browser tools like Postman/cURL without Origin header.
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+  }),
+);
 //add cookie parser middeleware
 app.use(cookieParser())
 //body parser middleware
