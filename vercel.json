@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "installCommand": "cd frontend/CP-PRO && npm install",
+  "buildCommand": "cd frontend/CP-PRO && npm run build",
+  "outputDirectory": "frontend/CP-PRO/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
