@@ -3,8 +3,8 @@ POST http://localhost:4000/auth/users
 Content-Type: application/json
 
 {
-  "firstName": "",
-  "lastName": "",
+  "firstName": "ram",
+  "lastName": "rev",
   "email": "user112377@mail.com",
   "role":"USER",
   "password": "",

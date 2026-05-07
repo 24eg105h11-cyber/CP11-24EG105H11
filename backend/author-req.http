@@ -15,7 +15,7 @@ Content-Type: application/json
 ### Create new Article
 POST http://localhost:4000/author-api/article
 Content-Type: application/json
-
+  
 {
   "author":"69b38fa58faa3804b6121696",
   "title":"Article-2 by Author 1",

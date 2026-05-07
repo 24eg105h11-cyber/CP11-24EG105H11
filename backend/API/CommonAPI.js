@@ -3,26 +3,28 @@ import { UserModel } from "../models/UserModel.js";
 import { hash, compare } from "bcryptjs";
 import { config } from "dotenv";
 import jwt from "jsonwebtoken";
+import { verifyToken } from "../middlewares/VerifyToken.js";
 const { sign } = jwt;
 export const commonApp = exp.Router();
-import { verifyToken } from "../middlewares/VerifyToken.js";
-import * as multer from "../config/multer.js";
+import { upload } from "../config/multer.js";
 import { uploadToCloudinary } from "../config/cloudinaryUpload.js";
 import cloudinary from "../config/cloudinary.js";
 config();
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProd = process.env.NODE_ENV === "production";
 const cookieOptions = {
   httpOnly: true,
-  secure: isProduction,
-  sameSite: isProduction ? "none" : "lax",
+  secure: isProd,
+  sameSite: isProd ? "none" : "lax",
 };
 
+const jwtSecret = process.env.SECRET_KEY || process.env.JWT_SECRET;
+
 //Route for register
-commonApp.post("/users", multer.upload.single("profileImageUrl"), async (req, res, next) => {
+commonApp.post("/users", upload.single("profileImageUrl"), async (req, res, next) => {
   let cloudinaryResult;
   try {
-    let allowedRoles = ["USER", "AUTHOR"];
+    let allowedRoles = ["USER", "AUTHOR", "ADMIN"];
     //get user from req
     const newUser = req.body;
     console.log(newUser);
@@ -33,29 +35,21 @@ commonApp.post("/users", multer.upload.single("profileImageUrl"), async (req, re
       return res.status(400).json({ message: "Invalid role" });
     }
 
-    // Check if user already exists
-    const existingUser = await UserModel.findOne({ email: newUser.email });
-    if (existingUser) {
-      return res.status(409).json({ message: "error occurred", error: "User already exists" });
-    }
-
     //Upload image to cloudinary from memoryStorage
-    let profileImageUrl = "";
     if (req.file) {
       cloudinaryResult = await uploadToCloudinary(req.file.buffer);
-      profileImageUrl = cloudinaryResult?.secure_url;
     }
+
+    // console.log("cloudinaryResult", cloudinaryResult);
+    //add CDN link(secure_url) of image to newUserObj
+    newUser.profileImageUrl = cloudinaryResult?.secure_url;
 
     //run validators manually
     //hash password and replace plain with hashed one
-    const hashedPassword = await hash(newUser.password, 12);
+    newUser.password = await hash(newUser.password, 12);
 
     //create New user document
-    const newUserDoc = new UserModel({
-      ...newUser,
-      password: hashedPassword,
-      profileImageUrl: profileImageUrl,
-    });
+    const newUserDoc = new UserModel(newUser);
 
     //save document
     await newUserDoc.save();
@@ -64,10 +58,10 @@ commonApp.post("/users", multer.upload.single("profileImageUrl"), async (req, re
   } catch (err) {
     console.log("err is ", err);
     //delete image from cloudinary
-    if (cloudinaryResult && cloudinaryResult.public_id) {
+    if (cloudinaryResult?.public_id) {
       await cloudinary.uploader.destroy(cloudinaryResult.public_id);
     }
-    res.status(500).json({ message: "error occurred", error: err.message || "Server side error" });
+    return next(err);
   }
 });
 
@@ -82,11 +76,18 @@ commonApp.post("/login", async (req, res) => {
   if (!user) {
     return res.status(400).json({ message: "error occurred", error: "Invalid email" });
   }
+
+  if (!user.isUserActive) {
+    return res.status(403).json({ message: "error occurred", error: "User blocked" });
+  }
   //compare password
   const isMatched = await compare(password, user.password);
   //if passwords not matched
   if (!isMatched) {
-    return res.status(400).json({ message: "error occurred", error: "Invalid password" });
+    return res.status(400).json({ message: "Invalid password" });
+  }
+  if (!jwtSecret) {
+    return res.status(500).json({ message: "error occurred", error: "Server misconfigured: missing JWT secret" });
   }
   //create jwt
   const signedToken = sign(
@@ -98,7 +99,7 @@ commonApp.post("/login", async (req, res) => {
       lastName: user.lastName,
       profileImageUrl: user.profileImageUrl,
     },
-    process.env.SECRET_KEY,
+    jwtSecret,
     {
       expiresIn: "1h",
     },
@@ -123,11 +124,50 @@ commonApp.get("/logout", (req, res) => {
 });
 
 //Page refresh
-commonApp.get("/check-auth", verifyToken("USER", "AUTHOR", "ADMIN"), (req, res) => {
-  res.status(200).json({
-    message: "authenticated",
-    payload: req.user,
-  });
+commonApp.get("/check-auth", async (req, res) => {
+  try {
+    const token = req.cookies?.token;
+
+    if (!token) {
+      return res.status(200).json({
+        message: "unauthenticated",
+        authenticated: false,
+        payload: null,
+      });
+    }
+
+    if (!jwtSecret) {
+      return res.status(200).json({
+        message: "unauthenticated",
+        authenticated: false,
+        payload: null,
+      });
+    }
+
+    const decodedToken = jwt.verify(token, jwtSecret);
+    const user = await UserModel.findById(decodedToken.id);
+
+    if (!user || !user.isUserActive) {
+      res.clearCookie("token", cookieOptions);
+      return res.status(200).json({
+        message: "unauthenticated",
+        authenticated: false,
+        payload: null,
+      });
+    }
+
+    return res.status(200).json({
+      message: "authenticated",
+      authenticated: true,
+      payload: decodedToken,
+    });
+  } catch (err) {
+    return res.status(200).json({
+      message: "unauthenticated",
+      authenticated: false,
+      payload: null,
+    });
+  }
 });
 
 //Change password
